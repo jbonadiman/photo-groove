@@ -1,10 +1,12 @@
 module PhotoGroove exposing (main)
 
 import Browser
-import Html exposing (div, h1, img, text, Html)
+import Html exposing (div, h1, h3, img, text, label, input, Html)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick)
 import Array exposing (Array)
+import Html exposing (button)
+import Random
 
 
 type alias Photo =
@@ -13,42 +15,24 @@ type alias Photo =
 type alias Model =
   { photos : List Photo
   , selectedUrl : String
+  , chosenSize : ThumbnailSize
   }
 
-type alias Message =
-  { description : String, data : String }
+type Message
+  = ClickedPhoto String
+  | ClickedSize ThumbnailSize
+  | ClickedSurpriseMe
+  | GotSelectedIndex Int
+
+
+type ThumbnailSize
+  = Small
+  | Medium
+  | Large
 
 
 urlPrefix : String
 urlPrefix = "https://elm-in-action.com/"
-
-view : Model -> Html Message
-view model = 
-  div [ class "content" ]
-    [ h1 [] [text "Photo Groove" ]
-    , div [ id "thumbnails" ]
-      (List.map (viewThumbnail model.selectedUrl) model.photos)
-    , img
-        [ class "large"
-        , src (urlPrefix ++ "large/" ++ model.selectedUrl)
-        ]
-        []
-    ]
-
-
-selectPhoto : Message
-selectPhoto = { description = "ClickedPhoto", data = "1.jpeg" }
-
-
-viewThumbnail : String -> Photo -> Html Message
-viewThumbnail selectedUrl thumb =
-  img
-    [ src (urlPrefix ++ thumb.url)
-    , classList [ ( "selected", selectedUrl == thumb.url ) ]
-    , onClick { selectPhoto | data = thumb.url }
-    ]
-    []
-
 
 initialModel : Model
 initialModel =
@@ -59,25 +43,96 @@ initialModel =
     , { url = "4.jpeg" }
     ]
     , selectedUrl = "1.jpeg"
+    , chosenSize = Medium
   }
-
 
 photoArray : Array Photo
 photoArray = Array.fromList initialModel.photos
 
 
-update : Message -> Model -> Model
+getPhotoUrl : Int -> String
+getPhotoUrl index =
+  case Array.get index photoArray of
+      Just photo -> photo.url
+      Nothing -> ""
+
+
+randomPhotoPicker : Random.Generator Int
+randomPhotoPicker =
+  Random.int 0 (Array.length photoArray - 1)
+
+
+view : Model -> Html Message
+view model = 
+  div [ class "content" ]
+    [ h1 [] [text "Photo Groove" ]
+    , button
+      [ onClick ClickedSurpriseMe ]
+      [ text "Surprise Me!" ]
+    , h3 [] [ text "Thumbnail Size:" ]
+    , div [ id "choose-size" ]
+      (List.map viewSizeChooser [Small, Medium, Large])
+    , div [ id "thumbnails", class (sizeToString model.chosenSize) ]
+      (List.map (viewThumbnail model.selectedUrl) model.photos)
+    , img
+        [ class "large"
+        , src (urlPrefix ++ "large/" ++ model.selectedUrl)
+        ]
+        []
+    ]
+
+
+viewThumbnail : String -> Photo -> Html Message
+viewThumbnail selectedUrl thumb =
+  img
+    [ src (urlPrefix ++ thumb.url)
+    , classList [ ( "selected", selectedUrl == thumb.url ) ]
+    , onClick (ClickedPhoto thumb.url)
+    ]
+    []
+
+
+viewSizeChooser : ThumbnailSize -> Html Message
+viewSizeChooser size =
+  label []
+    [ input [ type_ "radio", name "size", onClick (ClickedSize size) ] []
+    , text (sizeToString size)
+    ]
+
+
+sizeToString : ThumbnailSize -> String
+sizeToString size =
+  case size of
+    Small -> "small"
+    Medium -> "med"
+    Large -> "large"
+
+
+update : Message -> Model -> (Model, Cmd Message)
 update msg model =
-  if msg.description == "ClickedPhoto" then
-    { model | selectedUrl = msg.data }
+  case msg of
+    ClickedPhoto url ->
+      ( { model | selectedUrl = url }, Cmd.none )
 
-  else
-    model
+    ClickedSize size ->
+      ( { model | chosenSize = size }, Cmd.none )
+
+    ClickedSurpriseMe ->
+      ( model, Random.generate GotSelectedIndex randomPhotoPicker )
+
+    GotSelectedIndex index ->
+      if (getPhotoUrl index) == model.selectedUrl then
+        ( model, Random.generate GotSelectedIndex randomPhotoPicker )
+      else
+        ( { model | selectedUrl = getPhotoUrl index }, Cmd.none )
+        
 
 
+main : Program () Model Message
 main =
-  Browser.sandbox
-    { init = initialModel
+  Browser.element
+    { init = \_ -> ( initialModel, Cmd.none )
     , view = view
     , update = update
+    , subscriptions = \_ -> Sub.none
     }
