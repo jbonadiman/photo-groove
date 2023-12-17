@@ -1,0 +1,8 @@
+# elm-package generated files
+elm-stuff
+
+# build result
+app.js
+
+# elm-repl generated files
+repl-temp-*
